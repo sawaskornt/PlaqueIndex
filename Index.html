@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+  <style>
+    /* GENERAL STYLES */
+    body { 
+      font-family: 'Roboto', sans-serif; 
+      background-color: #f4f6f8; 
+      padding: 10px; /* Reduced padding for mobile */
+      -webkit-tap-highlight-color: transparent; /* Removes gray box on tap */
+    }
+    
+    .container { 
+      max-width: 1000px; 
+      margin: 0 auto; 
+      background: white; 
+      padding: 20px; 
+      border-radius: 8px; 
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+    }
+    
+    /* INPUTS */
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+    .inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+    .form-group { display: flex; flex-direction: column; }
+    label { font-size: 12px; color: #666; margin-bottom: 5px; font-weight: bold; }
+    input, select { 
+      padding: 8px; 
+      border: 1px solid #ddd; 
+      border-radius: 4px; 
+      font-size: 16px; /* Prevents auto-zoom on iPhone input */
+    }
+    
+    /* TOOLBAR */
+    .toolbar { display: flex; gap: 10px; margin-bottom: 20px; background: #eee; padding: 10px; border-radius: 5px; align-items: center; overflow-x: auto; }
+    .tool-btn { 
+      padding: 10px 16px; /* Larger hit area */
+      border: none; 
+      cursor: pointer; 
+      border-radius: 4px; 
+      font-weight: bold; 
+      transition: 0.1s; 
+      white-space: nowrap;
+    }
+    .tool-btn.active { outline: 2px solid #333; transform: scale(1.02); }
+    
+    #btn-mode-missing { background-color: #333; color: white; } 
+    #btn-mode-plaque { background-color: #7f8af8; color: white; } 
+    
+    /* CHART GRID */
+    .chart-row { 
+      display: flex; 
+      flex-wrap: nowrap; 
+      overflow-x: auto; 
+      gap: 0; 
+      margin-bottom: 25px; 
+      padding-bottom: 10px; 
+      width: 100%; 
+      -webkit-overflow-scrolling: touch; /* Smooth scroll on iOS */
+    }
+    
+    .tooth-wrapper { display: flex; flex-direction: column; align-items: center; width: 45px; flex-shrink: 0; }
+    .tooth-number { font-size: 11px; color: #777; font-weight: bold; height: 15px; display: flex; align-items: center; justify-content: center; }
+    .upper-label { margin-bottom: 4px; }
+    .lower-label { margin-top: 4px; }
+    
+    /* TOOTH BOX */
+    .tooth-box { 
+      width: 45px; 
+      height: 45px; 
+      position: relative; 
+      border: 1px solid #444; 
+      margin-right: -1px; 
+      background: white; 
+      z-index: 1; 
+    }
+    .midline-separator { border-right: 3px solid #000 !important; }
+    
+    /* THE OVERLAY (Lines on top) */
+    .cross-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none; 
+      z-index: 10; 
+      background-image: 
+        linear-gradient(to top right, transparent calc(50% - 1px), #888 calc(50% - 1px), #888 calc(50% + 1px), transparent calc(50% + 1px)),
+        linear-gradient(to bottom right, transparent calc(50% - 1px), #888 calc(50% - 1px), #888 calc(50% + 1px), transparent calc(50% + 1px));
+      opacity: 0.6;
+    }
+
+    /* SURFACES */
+    .surface { 
+      position: absolute; 
+      width: 100%; 
+      height: 100%; 
+      cursor: pointer; 
+      opacity: 0.0; 
+      z-index: 5; 
+      
+      /* FIX 2: IMPROVE TOUCH RESPONSE */
+      touch-action: manipulation; /* Disables double-tap zoom delay */
+    }
+
+    /* FIX 3: ONLY HOVER ON MOUSE DEVICES */
+    @media (hover: hover) {
+      .surface:hover { opacity: 0.2; background-color: #000; }
+    }
+    
+    .top { clip-path: polygon(0 0, 100% 0, 50% 50%); }
+    .right { clip-path: polygon(100% 0, 100% 100%, 50% 50%); }
+    .bottom { clip-path: polygon(0 100%, 100% 100%, 50% 50%); }
+    .left { clip-path: polygon(0 0, 0 100%, 50% 50%); }
+    
+    /* ACTIVE STATES */
+    .surface.missing { background-color: black !important; opacity: 1; }
+    .surface.plaque { background-color: #7f8af8 !important; opacity: 1; }
+    
+    /* RESULTS */
+    .results-box { background: #e3f2fd; padding: 15px; border-radius: 5px; text-align: center; margin-top: 20px; border: 1px solid #90caf9; }
+    .score-display { font-size: 24px; font-weight: bold; color: #1565c0; }
+    
+    /* HISTORY LIST */
+    #history-container { margin-top: 30px; border-top: 2px solid #eee; padding-top: 10px; }
+    .history-item { padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fafafa; margin-bottom: 5px; border-radius: 4px; }
+    
+    .history-actions { display: flex; gap: 5px; }
+    .history-btn { padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; border: none; }
+    
+    .btn-load { background: white; border: 1px solid #666; color: #444; }
+    .btn-new { background: #E8F5E9; border: 1px solid #4CAF50; color: #2E7D32; }
+
+    /* ACTIONS */
+    .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .btn { padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    .btn-save { background-color: #4CAF50; color: white; }
+    .btn-print { background-color: #607D8B; color: white; }
+    
+    @media print {
+      body { background: white; padding: 0; }
+      .container { box-shadow: none; max-width: 100%; width: 100%; padding: 0; }
+      .toolbar, .actions, #history-container, .search-btn, .inputs { display: none !important; }
+      .print-header { display: block !important; margin-bottom: 20px; }
+      .tooth-box { border: 1px solid black; }
+      .surface.plaque { background-color: #7f8af8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .surface.missing { background-color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .results-box { border: 2px solid black; background: none; color: black; }
+      .chart-row { flex-wrap: nowrap; overflow: visible; }
+    }
+    .print-header { display: none; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h2>Plaque Index Record</h2>
+    <div style="text-align: right; font-size: 12px; color: #888;">Plaque Record mobile-support v1 06-12-2025</div>
+  </div>
+
+  <div class="print-header">
+    <h3>Patient Plaque Index Report</h3>
+    <p><strong>HN:</strong> <span id="print-hn"></span> | <strong>Date:</strong> <span id="print-date"></span></p>
+  </div>
+
+  <div class="inputs">
+    <div class="form-group">
+      <label>Patient HN</label>
+      <div style="display: flex; gap: 5px;">
+        <input type="text" id="hn" placeholder="กรุณาระบุหมายเลข HN">
+        <button onclick="lookupHN()" class="search-btn" style="cursor:pointer;">🔍 ค้นหา</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Date of Visit</label>
+      <input type="date" id="visitDate">
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <span>Tools:</span>
+    <button class="tool-btn active" id="btn-mode-missing" onclick="setMode('missing')">1.เลือกซี่ฟันที่ไม่มี</button>
+    <button class="tool-btn" id="btn-mode-plaque" onclick="setMode('plaque')">2.บันทึกข้อมูล Plaque</button>
+  </div>
+
+  <div class="chart-row" id="row-upper"></div>
+  <div class="chart-row" id="row-lower"></div>
+
+  <div class="results-box">
+    <div>Plaque Score</div>
+    <div class="score-display" id="scorePercent">0.00%</div>
+    <div class="stats" id="scoreDetails">(0 Plaque / 128 Surfaces)</div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-print" onclick="preparePrint()">Export PDF</button>
+    <button class="btn btn-save" onclick="saveData()">Save Plaque Index Record</button>
+  </div>
+
+  <div id="history-container" style="display:none;">
+    <h3>Previous Visits</h3>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+<script>
+  // CONFIG & STATE
+  const UPPER_TEETH = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
+  const LOWER_TEETH = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
+  const SURFACES_PER_TOOTH = 4;
+  const TOTAL_SURFACES_MAX = (UPPER_TEETH.length + LOWER_TEETH.length) * SURFACES_PER_TOOTH;
+  
+  let currentMode = 'missing'; 
+  let chartData = {}; 
+  let historyRecords = []; 
+
+  window.onload = function() {
+    document.getElementById('visitDate').valueAsDate = new Date();
+    generateChart();
+  };
+
+  function formatDateToDMY(dateStr) {
+    if (!dateStr) return "";
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+  }
+
+  function generateChart() {
+    createRow(UPPER_TEETH, 'row-upper', 'top');
+    createRow(LOWER_TEETH, 'row-lower', 'bottom');
+  }
+
+  function createRow(teethArray, containerId, labelPos) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    teethArray.forEach((toothNum, index) => {
+      let wrapper = document.createElement('div');
+      wrapper.className = 'tooth-wrapper';
+      let numLabel = document.createElement('div');
+      numLabel.className = `tooth-number ${labelPos === 'top' ? 'upper-label' : 'lower-label'}`;
+      numLabel.innerText = toothNum;
+      
+      let box = document.createElement('div');
+      box.className = 'tooth-box';
+      if (index === 7) box.classList.add('midline-separator');
+      
+      let cross = document.createElement('div');
+      cross.className = 'cross-overlay';
+      box.appendChild(cross);
+
+      ['top', 'right', 'bottom', 'left'].forEach(side => {
+        let tri = document.createElement('div');
+        tri.className = `surface ${side}`;
+        tri.dataset.id = `${toothNum}-${side}`; 
+        // Use standard click, the CSS touch-action handles the speed now
+        tri.onclick = () => handleClick(tri);
+        box.appendChild(tri);
+      });
+
+      if (labelPos === 'top') { wrapper.appendChild(numLabel); wrapper.appendChild(box); }
+      else { wrapper.appendChild(box); wrapper.appendChild(numLabel); }
+      container.appendChild(wrapper);
+    });
+  }
+
+  function handleClick(element) {
+    const id = element.dataset.id;
+    const existingState = chartData[id];
+
+    if (existingState === currentMode) {
+      delete chartData[id];
+      element.classList.remove('missing', 'plaque');
+    } else {
+      chartData[id] = currentMode;
+      element.classList.remove('missing', 'plaque'); 
+      element.classList.add(currentMode);
+    }
+    
+    calculateScore();
+  }
+
+  function setMode(mode) {
+    currentMode = mode;
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`btn-mode-${mode}`).classList.add('active');
+  }
+
+  function calculateScore() {
+    let blockedCount = 0;
+    let plaqueCount = 0;
+    for (let key in chartData) {
+      if (chartData[key] === 'missing') blockedCount++;
+      if (chartData[key] === 'plaque') plaqueCount++;
+    }
+    const availableSurfaces = TOTAL_SURFACES_MAX - blockedCount;
+    let percentage = 0;
+    if (availableSurfaces > 0) percentage = (plaqueCount / availableSurfaces) * 100;
+    
+    document.getElementById('scorePercent').innerText = percentage.toFixed(2) + '%';
+    document.getElementById('scoreDetails').innerText = `(${plaqueCount} Plaque / ${availableSurfaces} Available) | ${blockedCount} Blocked`;
+  }
+
+  function saveData() {
+    const hn = document.getElementById('hn').value;
+    const date = document.getElementById('visitDate').value;
+    const score = document.getElementById('scorePercent').innerText;
+    if (!hn) { alert("Please enter HN"); return; }
+    
+    const btn = document.querySelector('.btn-save');
+    const oldText = btn.innerText;
+    btn.innerText = "Saving...";
+    btn.disabled = true;
+
+    const payload = { hn: hn, date: date, score: score, chart: chartData };
+    google.script.run
+      .withSuccessHandler(function(res) {
+        alert(res);
+        btn.innerText = oldText;
+        btn.disabled = false;
+        lookupHN();
+      })
+      .withFailureHandler(function(err){
+        alert("Error saving: " + err);
+        btn.innerText = oldText;
+        btn.disabled = false;
+      })
+      .saveRecord(payload);
+  }
+
+  function lookupHN() {
+    const hn = document.getElementById('hn').value;
+    if(!hn) { alert("Please enter HN to search"); return; }
+    
+    const btn = document.querySelector('.search-btn');
+    btn.innerText = "Searching...";
+    
+    google.script.run
+      .withSuccessHandler((records) => {
+         btn.innerText = "🔍 Search History";
+         displayHistory(records);
+      })
+      .withFailureHandler((err) => {
+         alert("Search Failed: " + err);
+         btn.innerText = "🔍 Search History";
+      })
+      .searchByHN(hn);
+  }
+
+  function displayHistory(records) {
+    historyRecords = records; 
+    const list = document.getElementById('history-list');
+    const container = document.getElementById('history-container');
+    list.innerHTML = '';
+    
+    if (records.length > 0 && records[0].error) {
+      alert("System Error: " + records[0].error);
+      return;
+    }
+    
+    if (records.length > 0) {
+      container.style.display = 'block';
+      records.forEach((rec, index) => {
+        
+        const displayDate = formatDateToDMY(rec.date);
+
+        let formattedScore = rec.score;
+        let numScore = parseFloat(rec.score);
+        if (!String(rec.score).includes('%') && !isNaN(numScore)) {
+            if (numScore <= 1) formattedScore = (numScore * 100).toFixed(2) + '%';
+            else formattedScore = numScore.toFixed(2) + '%';
+        }
+
+        let div = document.createElement('div');
+        div.className = 'history-item';
+        div.innerHTML = `
+          <div>
+            <strong>${displayDate}</strong> 
+            <span style="margin-left:10px; color:#1565c0; font-weight:bold;">${formattedScore}</span>
+          </div>
+          <div class="history-actions">
+            <button class="history-btn btn-load" onclick="loadHistoryFromIndex(${index})">View</button>
+            <button class="history-btn btn-new" onclick="loadNewRecordFromIndex(${index})">Start New</button>
+          </div>
+        `;
+        list.appendChild(div);
+      });
+    } else {
+      container.style.display = 'none';
+      alert("No records found for HN: " + document.getElementById('hn').value);
+    }
+  }
+
+  function loadHistoryFromIndex(index) {
+    if(!confirm("คุณต้องการเรียกดูข้อมูล จาก Visit ก่อนหน้านี้? View this past record? (Current markings will be cleared)")) return;
+    renderChart(historyRecords[index].chart);
+  }
+
+  function loadNewRecordFromIndex(index) {
+    if(!confirm("คุณต้องการบันทึก Plaque Index ใน Visit นี้ โดยใช้ข้อมูลฟันที่ไม่มีอยู่เดิม?")) return;
+    
+    const oldChartRaw = historyRecords[index].chart;
+    let oldChart = {};
+    if (typeof oldChartRaw === 'string') {
+       try { oldChart = JSON.parse(oldChartRaw); } catch(e) {}
+    } else {
+       oldChart = oldChartRaw;
+    }
+
+    let newChartData = {};
+    for (let key in oldChart) {
+      if (oldChart[key] === 'missing') {
+        newChartData[key] = 'missing';
+      }
+    }
+    
+    document.getElementById('visitDate').valueAsDate = new Date();
+    renderChart(newChartData);
+  }
+
+  function renderChart(dataObj) {
+    if (typeof dataObj === 'string') {
+      try { dataObj = JSON.parse(dataObj); } catch(e) { dataObj = {}; }
+    }
+    
+    chartData = dataObj || {}; 
+    
+    document.querySelectorAll('.surface').forEach(el => {
+      el.classList.remove('missing', 'plaque');
+    });
+
+    for (let key in chartData) {
+      let el = document.querySelector(`[data-id="${key}"]`);
+      if (el) el.classList.add(chartData[key]);
+    }
+    
+    calculateScore();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function preparePrint() {
+    document.getElementById('print-hn').innerText = document.getElementById('hn').value;
+    const rawDate = document.getElementById('visitDate').value;
+    document.getElementById('print-date').innerText = formatDateToDMY(rawDate);
+    window.print();
+  }
+</script>
+</body>
+</html>
