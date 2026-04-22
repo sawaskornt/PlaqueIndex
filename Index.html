@@ -146,14 +146,24 @@
       body { background: white; padding: 0; }
       .container { box-shadow: none; max-width: 100%; width: 100%; padding: 0; }
       .toolbar, .actions, #history-container, .search-btn, .inputs { display: none !important; }
-      .print-header { display: block !important; margin-bottom: 20px; }
-      .tooth-box { border: 1px solid black; }
+      #row-upper, #row-lower, .results-box { display: none !important; }
+      .print-header { display: block !important; margin-bottom: 15px; }
+      #print-all-visits { display: block !important; }
+      .tooth-box, .print-tooth-box { border: 1px solid black; }
       .surface.plaque { background-color: #7f8af8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .surface.missing { background-color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .results-box { border: 2px solid black; background: none; color: black; }
-      .chart-row { flex-wrap: nowrap; overflow: visible; }
+      .chart-row, .print-chart-row { flex-wrap: nowrap; overflow: visible; }
+      .print-visit-section { page-break-inside: avoid; }
     }
     .print-header { display: none; }
+
+    /* PRINT VISIT SECTIONS */
+    #print-all-visits { display: none; }
+    .print-visit-section { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px dashed #ccc; }
+    .print-visit-header { font-size: 14px; font-weight: bold; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid #ddd; }
+    .print-chart-row { display: flex; flex-wrap: nowrap; margin-bottom: 5px; }
+    .print-tooth-wrapper { display: flex; flex-direction: column; align-items: center; width: 32px; flex-shrink: 0; }
+    .print-tooth-box { width: 32px; height: 32px; position: relative; border: 1px solid #444; margin-right: -1px; background: white; z-index: 1; }
   </style>
 </head>
 <body>
@@ -166,7 +176,7 @@
 
   <div class="print-header">
     <h3>Patient Plaque Index Report</h3>
-    <p><strong>HN:</strong> <span id="print-hn"></span> | <strong>Date:</strong> <span id="print-date"></span></p>
+    <p><strong>HN:</strong> <span id="print-hn"></span> &nbsp;|&nbsp; <strong>Name:</strong> <span id="print-name"></span></p>
   </div>
 
   <div class="inputs">
@@ -180,6 +190,10 @@
     <div class="form-group">
       <label>Date of Visit</label>
       <input type="date" id="visitDate">
+    </div>
+    <div class="form-group" style="grid-column: 1 / -1;">
+      <label>Patient Name</label>
+      <input type="text" id="patientName" placeholder="Patient Name">
     </div>
   </div>
 
@@ -202,6 +216,8 @@
     <button class="btn btn-print" onclick="preparePrint()">Export PDF</button>
     <button class="btn btn-save" onclick="saveData()">Save Plaque Index Record</button>
   </div>
+
+  <div id="print-all-visits"></div>
 
   <div id="history-container" style="display:none;">
     <h3>Previous Visits</h3>
@@ -311,16 +327,17 @@
 
   function saveData() {
     const hn = document.getElementById('hn').value;
+    const name = document.getElementById('patientName').value;
     const date = document.getElementById('visitDate').value;
     const score = document.getElementById('scorePercent').innerText;
     if (!hn) { alert("Please enter HN"); return; }
-    
+
     const btn = document.querySelector('.btn-save');
     const oldText = btn.innerText;
     btn.innerText = "Saving...";
     btn.disabled = true;
 
-    const payload = { hn: hn, date: date, score: score, chart: chartData };
+    const payload = { hn: hn, name: name, date: date, score: score, chart: chartData };
     google.script.run
       .withSuccessHandler(function(res) {
         alert(res);
@@ -367,6 +384,9 @@
     }
     
     if (records.length > 0) {
+      const mostRecentName = records[0].name;
+      if (mostRecentName) document.getElementById('patientName').value = mostRecentName;
+
       container.style.display = 'block';
       records.forEach((rec, index) => {
         
@@ -448,9 +468,89 @@
 
   function preparePrint() {
     document.getElementById('print-hn').innerText = document.getElementById('hn').value;
-    const rawDate = document.getElementById('visitDate').value;
-    document.getElementById('print-date').innerText = formatDateToDMY(rawDate);
+    document.getElementById('print-name').innerText = document.getElementById('patientName').value || '—';
+
+    const printContainer = document.getElementById('print-all-visits');
+    printContainer.innerHTML = '';
+
+    if (historyRecords.length > 0) {
+      historyRecords.forEach(rec => printContainer.appendChild(buildVisitPrintSection(rec)));
+    } else {
+      printContainer.appendChild(buildVisitPrintSection({
+        date: document.getElementById('visitDate').value,
+        score: document.getElementById('scorePercent').innerText,
+        chart: chartData
+      }));
+    }
+
     window.print();
+  }
+
+  function buildVisitPrintSection(rec) {
+    const section = document.createElement('div');
+    section.className = 'print-visit-section';
+
+    let chartDataObj = {};
+    if (typeof rec.chart === 'string') {
+      try { chartDataObj = JSON.parse(rec.chart); } catch(e) {}
+    } else {
+      chartDataObj = rec.chart || {};
+    }
+
+    let formattedScore = String(rec.score || '');
+    const numScore = parseFloat(formattedScore);
+    if (!formattedScore.includes('%') && !isNaN(numScore)) {
+      formattedScore = numScore <= 1 ? (numScore * 100).toFixed(2) + '%' : numScore.toFixed(2) + '%';
+    }
+
+    const header = document.createElement('div');
+    header.className = 'print-visit-header';
+    header.innerHTML = `Date: ${formatDateToDMY(rec.date)} &nbsp;&nbsp; Plaque Score: ${formattedScore}`;
+    section.appendChild(header);
+
+    const upperRow = document.createElement('div');
+    upperRow.className = 'print-chart-row';
+    buildPrintChartRow(UPPER_TEETH, upperRow, chartDataObj, 'top');
+    section.appendChild(upperRow);
+
+    const lowerRow = document.createElement('div');
+    lowerRow.className = 'print-chart-row';
+    buildPrintChartRow(LOWER_TEETH, lowerRow, chartDataObj, 'bottom');
+    section.appendChild(lowerRow);
+
+    return section;
+  }
+
+  function buildPrintChartRow(teethArray, container, chartDataObj, labelPos) {
+    teethArray.forEach((toothNum, index) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'print-tooth-wrapper';
+
+      const numLabel = document.createElement('div');
+      numLabel.className = `tooth-number ${labelPos === 'top' ? 'upper-label' : 'lower-label'}`;
+      numLabel.innerText = toothNum;
+
+      const box = document.createElement('div');
+      box.className = 'print-tooth-box';
+      if (index === 7) box.classList.add('midline-separator');
+
+      const cross = document.createElement('div');
+      cross.className = 'cross-overlay';
+      box.appendChild(cross);
+
+      ['top', 'right', 'bottom', 'left'].forEach(side => {
+        const tri = document.createElement('div');
+        tri.className = `surface ${side}`;
+        const key = `${toothNum}-${side}`;
+        if (chartDataObj[key] === 'missing') tri.classList.add('missing');
+        else if (chartDataObj[key] === 'plaque') tri.classList.add('plaque');
+        box.appendChild(tri);
+      });
+
+      if (labelPos === 'top') { wrapper.appendChild(numLabel); wrapper.appendChild(box); }
+      else { wrapper.appendChild(box); wrapper.appendChild(numLabel); }
+      container.appendChild(wrapper);
+    });
   }
 </script>
 </body>
