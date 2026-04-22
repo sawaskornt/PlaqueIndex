@@ -150,6 +150,10 @@
       .print-header { display: block !important; margin-bottom: 15px; }
       #print-all-visits { display: block !important; }
       .tooth-box, .print-tooth-box { border: 1px solid black; }
+      /* Force diagonal gridlines to print */
+      .cross-overlay { -webkit-print-color-adjust: exact; print-color-adjust: exact; opacity: 0.6; }
+      /* Unmarked surfaces must stay transparent — some print engines ignore opacity:0 */
+      .surface:not(.missing):not(.plaque) { background: transparent !important; opacity: 0 !important; }
       .surface.plaque { background-color: #7f8af8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .surface.missing { background-color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .chart-row, .print-chart-row { flex-wrap: nowrap; overflow: visible; }
