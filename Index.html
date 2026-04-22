@@ -152,8 +152,9 @@
       .tooth-box, .print-tooth-box { border: 1px solid black; }
       /* Force diagonal gridlines to print */
       .cross-overlay { -webkit-print-color-adjust: exact; print-color-adjust: exact; opacity: 0.6; }
-      /* Unmarked surfaces must stay transparent — some print engines ignore opacity:0 */
-      .surface:not(.missing):not(.plaque) { background: transparent !important; opacity: 0 !important; }
+      /* Fully remove unmarked surfaces — opacity:0 is ignored by PDF renderers */
+      .surface:not(.missing):not(.plaque) { display: none !important; }
+      #print-footer { display: block !important; margin-top: 30px; font-size: 11px; color: #555; border-top: 1px solid #ccc; padding-top: 8px; }
       .surface.plaque { background-color: #7f8af8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .surface.missing { background-color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .chart-row, .print-chart-row { flex-wrap: nowrap; overflow: visible; }
@@ -168,6 +169,7 @@
     .print-chart-row { display: flex; flex-wrap: nowrap; margin-bottom: 5px; }
     .print-tooth-wrapper { display: flex; flex-direction: column; align-items: center; width: 32px; flex-shrink: 0; }
     .print-tooth-box { width: 32px; height: 32px; position: relative; border: 1px solid #444; margin-right: -1px; background: white; z-index: 1; }
+    #print-footer { display: none; }
   </style>
 </head>
 <body>
@@ -175,7 +177,6 @@
 <div class="container">
   <div class="header">
     <h2>Plaque Index Record</h2>
-    <div style="text-align: right; font-size: 12px; color: #888;">Plaque Record mobile-support v1 06-12-2025</div>
   </div>
 
   <div class="print-header">
@@ -222,6 +223,10 @@
   </div>
 
   <div id="print-all-visits"></div>
+
+  <div id="print-footer">
+    <span id="print-datetime"></span> &nbsp;|&nbsp; IP: <span id="print-ip">...</span>
+  </div>
 
   <div id="history-container" style="display:none;">
     <h3>Previous Visits</h3>
@@ -470,7 +475,7 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  function preparePrint() {
+  async function preparePrint() {
     document.getElementById('print-hn').innerText = document.getElementById('hn').value;
     document.getElementById('print-name').innerText = document.getElementById('patientName').value || '—';
 
@@ -486,6 +491,21 @@
         chart: chartData
       }));
     }
+
+    // Populate footer: timestamp
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const datetime = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    document.getElementById('print-datetime').innerText = `Printed: ${datetime}`;
+
+    // Populate footer: IP address
+    let ip = 'N/A';
+    try {
+      const res = await fetch('https://api.ipify.org?format=json');
+      const data = await res.json();
+      ip = data.ip;
+    } catch(e) {}
+    document.getElementById('print-ip').innerText = ip;
 
     window.print();
   }
