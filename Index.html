@@ -563,11 +563,11 @@
       box.appendChild(cross);
 
       ['top', 'right', 'bottom', 'left'].forEach(side => {
-        const tri = document.createElement('div');
-        tri.className = `surface ${side}`;
         const key = `${toothNum}-${side}`;
-        if (chartDataObj[key] === 'missing') tri.classList.add('missing');
-        else if (chartDataObj[key] === 'plaque') tri.classList.add('plaque');
+        const state = chartDataObj[key];
+        if (!state) return; // skip — no element means no PDF rendering artifact
+        const tri = document.createElement('div');
+        tri.className = `surface ${side} ${state}`;
         box.appendChild(tri);
       });
 
