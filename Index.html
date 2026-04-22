@@ -554,27 +554,55 @@
       numLabel.className = `tooth-number ${labelPos === 'top' ? 'upper-label' : 'lower-label'}`;
       numLabel.innerText = toothNum;
 
-      const box = document.createElement('div');
-      box.className = 'print-tooth-box';
-      if (index === 7) box.classList.add('midline-separator');
+      const svg = buildPrintToothSVG(toothNum, chartDataObj, index === 7);
 
-      const cross = document.createElement('div');
-      cross.className = 'cross-overlay';
-      box.appendChild(cross);
-
-      ['top', 'right', 'bottom', 'left'].forEach(side => {
-        const key = `${toothNum}-${side}`;
-        const state = chartDataObj[key];
-        if (!state) return; // skip — no element means no PDF rendering artifact
-        const tri = document.createElement('div');
-        tri.className = `surface ${side} ${state}`;
-        box.appendChild(tri);
-      });
-
-      if (labelPos === 'top') { wrapper.appendChild(numLabel); wrapper.appendChild(box); }
-      else { wrapper.appendChild(box); wrapper.appendChild(numLabel); }
+      if (labelPos === 'top') { wrapper.appendChild(numLabel); wrapper.appendChild(svg); }
+      else { wrapper.appendChild(svg); wrapper.appendChild(numLabel); }
       container.appendChild(wrapper);
     });
+  }
+
+  // Render a single tooth as inline SVG so Safari/Chrome PDF engines
+  // produce correct output — CSS clip-path fills black in both engines' PDF renderers.
+  function buildPrintToothSVG(toothNum, chartDataObj, isMidline) {
+    const S = 32, M = S / 2;
+    const svg = mkSvg('svg', { viewBox: `0 0 ${S} ${S}`, width: S, height: S });
+    svg.style.display = 'block';
+
+    // White background so surrounding page colour never bleeds through
+    svg.appendChild(mkSvg('rect', { x: 0, y: 0, width: S, height: S, fill: 'white' }));
+
+    // Filled triangles only for marked surfaces
+    const fills = { missing: 'black', plaque: '#7f8af8' };
+    const pts = {
+      top:    `0,0 ${S},0 ${M},${M}`,
+      right:  `${S},0 ${S},${S} ${M},${M}`,
+      bottom: `0,${S} ${S},${S} ${M},${M}`,
+      left:   `0,0 0,${S} ${M},${M}`,
+    };
+    ['top', 'right', 'bottom', 'left'].forEach(side => {
+      const state = chartDataObj[`${toothNum}-${side}`];
+      if (!state) return;
+      svg.appendChild(mkSvg('polygon', { points: pts[side], fill: fills[state] }));
+    });
+
+    // Diagonal X lines drawn on top of any filled triangles
+    svg.appendChild(mkSvg('line', { x1: 0,  y1: 0,  x2: S, y2: S, stroke: '#888', 'stroke-width': '1', opacity: '0.6' }));
+    svg.appendChild(mkSvg('line', { x1: S,  y1: 0,  x2: 0, y2: S, stroke: '#888', 'stroke-width': '1', opacity: '0.6' }));
+
+    // Tooth border (drawn last so it sits above fills)
+    svg.appendChild(mkSvg('rect', { x: 0.5, y: 0.5, width: S - 1, height: S - 1, fill: 'none', stroke: '#444', 'stroke-width': '1' }));
+    if (isMidline) {
+      svg.appendChild(mkSvg('line', { x1: S, y1: 0, x2: S, y2: S, stroke: 'black', 'stroke-width': '3' }));
+    }
+
+    return svg;
+  }
+
+  function mkSvg(tag, attrs) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+    return el;
   }
 </script>
 </body>
